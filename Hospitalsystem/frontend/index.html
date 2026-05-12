@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Smart Hospital Queue</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: #E6F0FF;
+      color: #333;
+    }
+
+    header {
+      background: #007BFF;
+      color: white;
+      padding: 16px;
+      font-size: 20px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 30px auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: #FFFFFF;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+
+    h3 {
+      margin-top: 0;
+      color: #007BFF;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    input:focus {
+      border-color: #007BFF;
+      outline: none;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      background: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+
+    .queue {
+      grid-column: span 2;
+    }
+
+    .queue-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 8px;
+      font-weight: 500;
+    }
+
+    .waiting {
+      background: #E6F0FF;
+    }
+
+    .progress {
+      background: #007BFF;
+      color: white;
+    }
+
+    .badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      background: white;
+      color: #007BFF;
+      font-weight: 600;
+    }
+
+    .now-serving {
+      margin-bottom: 10px;
+      font-weight: 600;
+      color: #007BFF;
+    }
+
+    .tabs {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+    }
+
+    .tab {
+      padding: 10px 20px;
+      margin: 0 5px;
+      background: white;
+      border-radius: 20px;
+      cursor: pointer;
+      border: 1px solid #ddd;
+    }
+
+    .active {
+      background: #007BFF;
+      color: white;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>🏥 Smart Hospital Queue System</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('patient')">Patient</div>
+  <div class="tab" onclick="showTab('doctor')">Doctor</div>
+</div>
+
+<div class="container">
+
+  <!-- PATIENT -->
+  <div id="patient" class="card">
+    <h3>Patient Registration</h3>
+
+    <input id="name" placeholder="Full Name">
+    <input id="age" placeholder="Age">
+    <input id="phone" placeholder="Phone Number">
+    <input id="symptoms" placeholder="Symptoms">
+
+    <button onclick="registerPatient()">Register</button>
+  </div>
+
+  <!-- DOCTOR -->
+  <div id="doctor" class="card" style="display:none;">
+    <h3>Doctor Panel</h3>
+
+    <button onclick="callNext()">Call Next Patient</button>
+    <button onclick="completePatient()">Complete Current</button>
+  </div>
+
+  <!-- QUEUE -->
+  <div class="card queue">
+    <div id="nowServing" class="now-serving"></div>
+    <h3>Live Queue</h3>
+    <div id="queue"></div>
+  </div>
+
+</div>
+
+<script>
+
+function showTab(role) {
+  document.getElementById("patient").style.display = role === "patient" ? "block" : "none";
+  document.getElementById("doctor").style.display = role === "doctor" ? "block" : "none";
+
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  event.target.classList.add("active");
+}
+
+// REGISTER
+async function registerPatient() {
+  const name = document.getElementById("name").value;
+  const age = document.getElementById("age").value;
+  const phone = document.getElementById("phone").value;
+  const symptoms = document.getElementById("symptoms").value;
+
+  await fetch("/register_patient", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({name, age, phone, symptoms})
+  });
+
+  await fetch("/generate_token", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({department: "General"})
+  });
+
+  alert("Patient Registered");
+  loadQueue();
+}
+
+// LOAD QUEUE
+async function loadQueue() {
+  const res = await fetch("/queue_status");
+  const data = await res.json();
+
+  const q = document.getElementById("queue");
+  q.innerHTML = "";
+
+  let current = null;
+
+  data
+    .filter(p => p.status !== "completed")
+    .forEach(p => {
+
+      let div = document.createElement("div");
+
+      let cls = "queue-item waiting";
+      if (p.status === "in_progress") {
+        cls = "queue-item progress";
+        current = p.name;
+      }
+
+      div.className = cls;
+      div.innerHTML = `
+        👤 ${p.name}
+        <span class="badge">${p.status}</span>
+      `;
+
+      q.appendChild(div);
+    });
+
+  document.getElementById("nowServing").innerText =
+    current ? "Now Serving: " + current : "";
+}
+
+// CALL NEXT
+async function callNext() {
+  await fetch("/call_next", { method: "POST" });
+  loadQueue();
+}
+
+// COMPLETE
+async function completePatient() {
+  const res = await fetch("/queue_status");
+  const data = await res.json();
+
+  const current = data.find(p => p.status === "in_progress");
+
+  if (!current) {
+    alert("No active patient");
+    return;
+  }
+
+  await fetch("/complete_patient", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({token_id: current.token_id})
+  });
+
+  loadQueue();
+}
+
+// AUTO REFRESH
+setInterval(loadQueue, 3000);
+
+</script>
+
+</body>
+</html>
